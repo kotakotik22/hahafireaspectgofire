@@ -32,7 +32,9 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.world.BlockEvent;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ExtensionPoint;
 import net.minecraftforge.fml.InterModComms;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -40,7 +42,9 @@ import net.minecraftforge.fml.event.lifecycle.InterModEnqueueEvent;
 import net.minecraftforge.fml.event.lifecycle.InterModProcessEvent;
 import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.network.FMLNetworkConstants;
 import net.minecraftforge.registries.ForgeRegistry;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -58,6 +62,8 @@ public class FireAspectDoFire {
     private static final Logger LOGGER = LogManager.getLogger();
 
     public FireAspectDoFire() {
+        ModLoadingContext.get().registerExtensionPoint(ExtensionPoint.DISPLAYTEST, () -> Pair.of(() -> FMLNetworkConstants.IGNORESERVERONLY, (a, b) -> true));
+
         // Register ourselves for server and other game events we are interested in
         MinecraftForge.EVENT_BUS.register(this);
     }
@@ -70,8 +76,12 @@ public class FireAspectDoFire {
         return EnchantmentHelper.getEnchantments(stack).keySet().stream().anyMatch(enchantment -> enchantment instanceof FireAspectEnchantment);
     }
 
-    public static boolean allChecks(ItemStack stack) {
-        return isSword(stack) && hasFireAspect(stack);
+    public static boolean allChecks(ItemStack stack, boolean isRemote) {
+        return isSword(stack) && hasFireAspect(stack) && !isRemote;
+    }
+
+    public static boolean allChecks(ItemStack stack, World world) {
+        return allChecks(stack, world.isRemote);
     }
 
     static Random random = new Random();
@@ -100,7 +110,7 @@ public class FireAspectDoFire {
         @SubscribeEvent
         public static void onBlockLeftClicked(PlayerInteractEvent.LeftClickBlock event) {
             ItemStack stack = event.getItemStack();
-            if(allChecks(stack)) {
+            if(allChecks(stack, event.getWorld())) {
                 igniteBlock(event);
             }
         }
@@ -108,7 +118,7 @@ public class FireAspectDoFire {
         @SubscribeEvent
         public static void onEntityAttacked(AttackEntityEvent event) {
             // players cant attack with offhand so its safe to assume its the main hand
-            if (event.getTarget() instanceof CreeperEntity && allChecks((event.getPlayer()).getHeldItemMainhand())) {
+            if (event.getTarget() instanceof CreeperEntity && allChecks((event.getPlayer()).getHeldItemMainhand(), event.getEntity().getEntityWorld())) {
                 ((CreeperEntity) event.getTarget()).ignite();
             }
         }
